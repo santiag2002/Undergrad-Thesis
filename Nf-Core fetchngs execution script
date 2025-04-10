@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --account=def-mcfarlas
+#SBATCH --time=24:00:00
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=16G
+#SBATCH --job-name=fetchngs
+#SBATCH --output=FPC.out
+#SBATCH --error=FPC.err
+
+module load StdEnv/2023
+module load nextflow/24.04.4
+module load apptainer/1.3.5
+
+# Set Apptainer environment variables
+export APPTAINER_BIND="/etc/resolv.conf:/etc/resolv.conf"
+export APPTAINER_DNS="8.8.8.8"
+export APPTAINER_CACHEDIR="$SCRATCH/.apptainer"
+
+cd $SCRATCH/thesis/file_processing
+
+# Print Nextflow and Apptainer versions for debugging
+nextflow -version
+apptainer --version
+
+nextflow run nf-core/fetchngs -r 1.11.0 \
+    --input accessions.csv \
+    --outdir fastq_files \
+    -profile apptainer \
+    --disable-container-checks \
+    --input_type sra \
+    -resume \
+    -with-report fetchngs_report.html \
+    -with-trace
+[santiag2@cedar1 file_processing]$
