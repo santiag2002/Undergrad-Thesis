@@ -1,0 +1,57 @@
+#!/bin/bash
+#SBATCH --account=def-mcfarlas
+#SBATCH --time=24:00:00
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
+#SBATCH --job-name=subset1_analysis
+#SBATCH --output=subset1.out
+#SBATCH --error=subset1.err
+
+# Load necessary modules
+module load StdEnv/2020
+module load gcc/9.3.0
+module load bcftools
+
+# Set variables
+BAM_DIR="./aligned"
+REF_GENOME="./reference_genome.fa"
+OUTPUT_VCF="subset1_variants.vcf.gz"
+
+# Print job info
+echo "Job started at: $(date)"
+echo "Running on node: $(hostname)"
+echo "BCFtools version: $(bcftools --version | head -n1)"
+
+# Create a list of BAM files with full paths
+BAM_FILES=$(cat subset1.txt | sed "s|^|$BAM_DIR/|" | tr '\n' ' ')
+
+# Print the list of BAM files being processed
+echo "BAM files being processed:"
+echo "$BAM_FILES"
+
+# Run variant calling
+echo "Starting variant calling at: $(date)"
+bcftools mpileup -Ou -f ${REF_GENOME} ${BAM_FILES} | \
+    bcftools call -mv -Oz -o ${OUTPUT_VCF}
+
+# Check if the output file was created and has content
+if [ -s "${OUTPUT_VCF}" ]; then
+    echo "Variant calling completed successfully. Output file: ${OUTPUT_VCF}"
+else
+    echo "Error: Variant calling failed or produced an empty file." >&2
+    exit 1
+fi
+
+# Index the output VCF
+echo "Indexing output VCF at: $(date)"
+bcftools index ${OUTPUT_VCF}
+
+# Generate stats
+echo "Generating VCF stats at: $(date)"
+bcftools stats ${OUTPUT_VCF} > subset1_variants_stats.txt
+
+echo "Job completed at: $(date)"
+
+# Print resource usage
+echo "Resource usage summary:"
+sacct -j $SLURM_JOB_ID --format=JobID,JobName,MaxRSS,Elapsed
