@@ -1,0 +1,48 @@
+#!/bin/bash
+#SBATCH --account=def-mcfarlas
+#SBATCH --time=1-00:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --job-name=radseq_alignment
+#SBATCH --output=alignment.out
+#SBATCH --error=alignment.err
+
+# Change to the alignment directory
+cd $SCRATCH/thesis/alignment
+
+module load StdEnv/2023
+module load nextflow/24.04.4
+module load apptainer/1.3.5
+
+export APPTAINER_CACHEDIR=$SCRATCH/.singularity
+
+echo "Nextflow version:"
+nextflow -version
+
+echo "Apptainer version:"
+apptainer --version
+
+echo "Checking for test container:"
+if [ ! -f "hello-world_latest.sif" ]; then
+    echo "Pulling test container:"
+    apptainer pull docker://hello-world
+else
+    echo "Test container already exists, skipping pull."
+fi
+
+echo "Running test container:"
+apptainer run hello-world_latest.sif
+
+echo "Current directory contents:"
+ls -l
+
+echo "Cluster status:"
+sinfo -o "%C %t"
+
+# Run Nextflow
+NXF_ANSI_LOG=false nextflow run alignment_workflow.nf \
+    -profile apptainer \
+    -resume \
+    -with-report \
+    -with-timeline \
+    -with-trace
