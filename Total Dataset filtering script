@@ -1,0 +1,47 @@
+#!/bin/bash
+#SBATCH --account=def-mcfarlas
+#SBATCH --time=4:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --job-name=snp_presence_analysis
+#SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
+
+# Load necessary modules
+module load StdEnv/2020 gcc/9.3.0 bcftools
+
+# Set the name of your VCF file
+VCF_FILE="potential_variants.vcf.gz"
+
+# Get the total number of samples
+TOTAL_SAMPLES=$(bcftools query -l ${VCF_FILE} | wc -l)
+
+echo "Total number of samples: $TOTAL_SAMPLES"
+
+# Function to filter VCF and count SNPs
+filter_and_count() {
+    local threshold=$1
+    local snp_count=$(bcftools view -i "AC>=${threshold}" ${VCF_FILE} | grep -v '^#' | wc -l)
+    echo "${threshold},${snp_count}"
+}
+
+# Output header
+echo "Threshold,SNP_Count" > snp_presence_analysis.csv
+
+# Filter for SNPs in at least one sample
+filter_and_count 1 >> snp_presence_analysis.csv
+
+# Filter for increasing percentages (10% increments)
+for percent in $(seq 10 10 100)
+do
+    threshold=$(echo "scale=0; $TOTAL_SAMPLES * $percent / 100" | bc)
+    filter_and_count $threshold >> snp_presence_analysis.csv
+done
+
+# Generate a summary of the results
+echo "Analysis complete. Results saved in snp_presence_analysis.csv"
+echo "Summary of results:"
+echo "-------------------"
+echo "Threshold | SNP Count"
+echo "-------------------"
+awk -F',' '{printf "%-9s | %s\n", $1, $2}' snp_presence_analysis.csv
