@@ -1,0 +1,65 @@
+#!/bin/bash
+#SBATCH --account=def-mcfarlas
+#SBATCH --time=24:00:00
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
+#SBATCH --job-name=subset3_analysis
+#SBATCH --output=subset3.out
+#SBATCH --error=subset3.err
+
+# Load necessary modules
+module load StdEnv/2020
+module load gcc/9.3.0
+module load bcftools
+
+# Set variables
+BAM_DIR="./aligned"
+REF_GENOME="./reference_genome.fa"
+OUTPUT_VCF="subset3_variants.vcf.gz"
+
+# Print job info
+echo "Job started at: $(date)"
+echo "Running on node: $(hostname)"
+echo "BCFtools version: $(bcftools --version | head -n1)"
+
+# Create a list of BAM files, grouping paired-end files
+BAM_FILES=$(awk '{sub(/\.bam$/, ""); sub(/_[12]$/, ""); print}' subset3.txt | sort | uniq | while read sample; do
+    if [[ -f "${BAM_DIR}/${sample}_1.bam" && -f "${BAM_DIR}/${sample}_2.bam" ]]; then
+        echo -n "${BAM_DIR}/${sample}_1.bam ${BAM_DIR}/${sample}_2.bam "
+    elif [[ -f "${BAM_DIR}/${sample}.bam" ]]; then
+        echo -n "${BAM_DIR}/${sample}.bam "
+    else
+        echo "Warning: BAM file not found for sample $sample" >&2
+    fi
+done)
+
+# Print the list of BAM files being processed
+echo "BAM files being processed:"
+echo "$BAM_FILES"
+
+# Run variant calling
+echo "Starting variant calling at: $(date)"
+bcftools mpileup -Ou -f ${REF_GENOME} ${BAM_FILES} | \
+    bcftools call -mv -Oz -o ${OUTPUT_VCF}
+
+# Check if the output file was created and has content
+if [ -s "${OUTPUT_VCF}" ]; then
+    echo "Variant calling completed successfully. Output file: ${OUTPUT_VCF}"
+else
+    echo "Error: Variant calling failed or produced an empty file." >&2
+    exit 1
+fi
+
+# Index the output VCF
+echo "Indexing output VCF at: $(date)"
+bcftools index ${OUTPUT_VCF}
+
+# Generate stats
+echo "Generating VCF stats at: $(date)"
+bcftools stats ${OUTPUT_VCF} > subset3_variants_stats.txt
+
+echo "Job completed at: $(date)"
+
+# Print resource usage
+echo "Resource usage summary:"
+sacct -j $SLURM_JOB_ID --format=JobID,JobName,MaxRSS,Elapsed
