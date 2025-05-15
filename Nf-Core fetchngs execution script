@@ -31,4 +31,4 @@ nextflow run nf-core/fetchngs -r 1.11.0 \
     -resume \
     -with-report fetchngs_report.html \
     -with-trace
-[santiag2@cedar1 file_processing]$
+
